@@ -4,525 +4,373 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Brain, 
   RotateCcw, 
   CheckCircle, 
   X, 
-  Search, 
+  Shuffle, 
   Filter,
-  Zap,
   RefreshCw,
-  ArrowLeft,
-  ArrowRight
+  BookOpen,
+  Code,
+  Zap
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface Flashcard {
   id: string;
-  topicId: string;
-  topicTitle: string;
   subject: string;
   question: string;
   answer: string;
   difficulty: 'easy' | 'medium' | 'hard';
   isLearned: boolean;
-  lastReviewed: string;
-  reviewCount: number;
+  createdAt: string;
 }
+
+const programmingSubjects = [
+  'JavaScript', 'Python', 'Java', 'C++', 'React', 'Node.js',
+  'TypeScript', 'Go', 'Rust', 'PHP', 'C#', 'HTML', 'CSS',
+  'Vue.js', 'Angular', 'Swift', 'Kotlin', 'Ruby'
+];
+
+const generateProgrammingFlashcards = (subject: string): Flashcard[] => {
+  const flashcardTemplates = {
+    JavaScript: [
+      { q: "What is the difference between let, const, and var?", a: "let and const are block-scoped, var is function-scoped. const cannot be reassigned, let can be reassigned, var can be reassigned and redeclared." },
+      { q: "What is a closure in JavaScript?", a: "A closure is a function that has access to variables in its outer scope even after the outer function has returned." },
+      { q: "What is the event loop?", a: "The event loop is a mechanism that handles asynchronous operations in JavaScript by managing the call stack and callback queue." },
+      { q: "What is hoisting?", a: "Hoisting is JavaScript's behavior of moving variable and function declarations to the top of their scope during compilation." },
+      { q: "What is the difference between == and ===?", a: "== compares values with type coercion, === compares values and types without coercion (strict equality)." }
+    ],
+    Python: [
+      { q: "What is a list comprehension?", a: "A concise way to create lists using the syntax: [expression for item in iterable if condition]" },
+      { q: "What is the difference between list and tuple?", a: "Lists are mutable (can be changed), tuples are immutable (cannot be changed). Lists use [], tuples use ()." },
+      { q: "What is a decorator?", a: "A decorator is a function that modifies or extends the behavior of another function without permanently modifying it." },
+      { q: "What is the GIL?", a: "Global Interpreter Lock - a mutex that prevents multiple threads from executing Python bytecodes simultaneously." },
+      { q: "What is the difference between is and ==?", a: "'is' checks object identity (same object in memory), '==' checks value equality." }
+    ],
+    React: [
+      { q: "What is JSX?", a: "JSX is a syntax extension for JavaScript that allows writing HTML-like code in React components." },
+      { q: "What is the difference between state and props?", a: "State is internal component data that can change, props are external data passed from parent components (read-only)." },
+      { q: "What is useEffect hook?", a: "useEffect is a hook that lets you perform side effects in functional components (like componentDidMount, componentDidUpdate)." },
+      { q: "What is the Virtual DOM?", a: "A JavaScript representation of the real DOM that React uses to optimize rendering by comparing changes before updating the actual DOM." },
+      { q: "What is useState hook?", a: "useState is a hook that lets you add state to functional components, returning current state and a setter function." }
+    ],
+    CSS: [
+      { q: "What is the box model?", a: "The box model consists of content, padding, border, and margin that define the space occupied by an element." },
+      { q: "What is flexbox?", a: "Flexbox is a CSS layout method for arranging items in rows or columns with flexible sizing and alignment options." },
+      { q: "What is the difference between margin and padding?", a: "Margin is space outside the element's border, padding is space inside the element's border around the content." },
+      { q: "What is CSS Grid?", a: "CSS Grid is a 2D layout system that allows creating complex layouts with rows and columns." },
+      { q: "What is specificity?", a: "CSS specificity determines which styles are applied when multiple rules target the same element, based on selector types." }
+    ]
+  };
+
+  const templates = flashcardTemplates[subject as keyof typeof flashcardTemplates] || flashcardTemplates.JavaScript;
+  const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
+  
+  return templates.map((template, index) => ({
+    id: `${subject.toLowerCase()}-${Date.now()}-${index}`,
+    subject,
+    question: template.q,
+    answer: template.a,
+    difficulty: difficulties[Math.floor(Math.random() * difficulties.length)],
+    isLearned: Math.random() > 0.7,
+    createdAt: new Date().toISOString()
+  }));
+};
 
 const FlashcardViewer = () => {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
-  const [filteredCards, setFilteredCards] = useState<Flashcard[]>([]);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSubject, setFilterSubject] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [studyMode, setStudyMode] = useState<'all' | 'unlearned'>('all');
-  const { toast } = useToast();
+  const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const [filteredCards, setFilteredCards] = useState<Flashcard[]>([]);
+  const [showLearnedOnly, setShowLearnedOnly] = useState(false);
 
   useEffect(() => {
-    loadFlashcards();
+    // Generate initial flashcards for all subjects
+    const allFlashcards: Flashcard[] = [];
+    programmingSubjects.slice(0, 6).forEach(subject => {
+      allFlashcards.push(...generateProgrammingFlashcards(subject));
+    });
+    setFlashcards(allFlashcards);
   }, []);
 
   useEffect(() => {
-    applyFilters();
-  }, [flashcards, searchTerm, filterSubject, filterStatus, studyMode]);
-
-  const loadFlashcards = () => {
-    const saved = localStorage.getItem('studygenie_flashcards');
-    if (saved) {
-      const cards = JSON.parse(saved);
-      setFlashcards(cards);
-    } else {
-      // Sample flashcards for demonstration
-      const sampleCards: Flashcard[] = [
-        {
-          id: '1',
-          topicId: '1',
-          topicTitle: 'Calculus Integration',
-          subject: 'Mathematics',
-          question: 'What is the integral of x² dx?',
-          answer: '(x³/3) + C, where C is the constant of integration',
-          difficulty: 'medium',
-          isLearned: false,
-          lastReviewed: new Date().toISOString(),
-          reviewCount: 0
-        },
-        {
-          id: '2',
-          topicId: '2',
-          topicTitle: 'Quantum Mechanics',
-          subject: 'Physics',
-          question: 'What is the Schrödinger equation?',
-          answer: 'iℏ ∂Ψ/∂t = ĤΨ, where Ψ is the wave function and Ĥ is the Hamiltonian operator',
-          difficulty: 'hard',
-          isLearned: false,
-          lastReviewed: new Date().toISOString(),
-          reviewCount: 0
-        },
-        {
-          id: '3',
-          topicId: '3',
-          topicTitle: 'Organic Chemistry',
-          subject: 'Chemistry',
-          question: 'What is a nucleophilic substitution reaction?',
-          answer: 'A reaction where a nucleophile replaces a leaving group in a molecule, common in organic chemistry',
-          difficulty: 'medium',
-          isLearned: true,
-          lastReviewed: new Date().toISOString(),
-          reviewCount: 3
-        }
-      ];
-      setFlashcards(sampleCards);
-      saveFlashcards(sampleCards);
+    let filtered = flashcards;
+    
+    if (selectedSubject !== 'all') {
+      filtered = filtered.filter(card => card.subject === selectedSubject);
     }
-  };
-
-  const saveFlashcards = (cards: Flashcard[]) => {
-    localStorage.setItem('studygenie_flashcards', JSON.stringify(cards));
-  };
-
-  const applyFilters = () => {
-    let filtered = [...flashcards];
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(card =>
-        card.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        card.answer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        card.topicTitle.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply subject filter
-    if (filterSubject !== 'all') {
-      filtered = filtered.filter(card => card.subject === filterSubject);
-    }
-
-    // Apply status filter
-    if (filterStatus === 'learned') {
-      filtered = filtered.filter(card => card.isLearned);
-    } else if (filterStatus === 'unlearned') {
+    
+    if (showLearnedOnly) {
       filtered = filtered.filter(card => !card.isLearned);
     }
-
-    // Apply study mode filter
-    if (studyMode === 'unlearned') {
-      filtered = filtered.filter(card => !card.isLearned);
-    }
-
+    
     setFilteredCards(filtered);
-    if (filtered.length > 0 && currentCardIndex >= filtered.length) {
-      setCurrentCardIndex(0);
-    }
-  };
+    setCurrentIndex(0);
+    setIsFlipped(false);
+  }, [flashcards, selectedSubject, showLearnedOnly]);
 
-  const generateFlashcards = async () => {
-    setIsGenerating(true);
+  const generateNewFlashcards = () => {
+    const subject = selectedSubject === 'all' ? 
+      programmingSubjects[Math.floor(Math.random() * programmingSubjects.length)] : 
+      selectedSubject;
     
-    try {
-      const topics = JSON.parse(localStorage.getItem('studygenie_topics') || '[]');
-      
-      if (topics.length === 0) {
-        toast({
-          title: "No Topics Found",
-          description: "Please add some topics to your syllabus first",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Simulate AI generation
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const newFlashcards: Flashcard[] = [];
-      
-      topics.forEach((topic: any, topicIndex: number) => {
-        // Generate 3-5 flashcards per topic
-        const cardCount = Math.floor(Math.random() * 3) + 3;
-        
-        for (let i = 0; i < cardCount; i++) {
-          const sampleQuestions = [
-            {
-              q: `What are the key concepts in ${topic.title}?`,
-              a: `The main concepts include fundamental principles, applications, and theoretical foundations of ${topic.title}.`
-            },
-            {
-              q: `How does ${topic.title} relate to ${topic.subject}?`,
-              a: `${topic.title} is a crucial component of ${topic.subject} that helps understand core principles and their applications.`
-            },
-            {
-              q: `What are the practical applications of ${topic.title}?`,
-              a: `${topic.title} has numerous applications in real-world scenarios, research, and advanced studies in ${topic.subject}.`
-            }
-          ];
-
-          const questionData = sampleQuestions[i % sampleQuestions.length];
-          
-          newFlashcards.push({
-            id: `generated-${Date.now()}-${topicIndex}-${i}`,
-            topicId: topic.id,
-            topicTitle: topic.title,
-            subject: topic.subject,
-            question: questionData.q,
-            answer: questionData.a,
-            difficulty: ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)] as 'easy' | 'medium' | 'hard',
-            isLearned: false,
-            lastReviewed: new Date().toISOString(),
-            reviewCount: 0
-          });
-        }
+    const newCards = generateProgrammingFlashcards(subject);
+    
+    if (selectedSubject === 'all') {
+      // Add cards for multiple subjects
+      const subjects = programmingSubjects.slice(0, 4);
+      const allNewCards: Flashcard[] = [];
+      subjects.forEach(subj => {
+        allNewCards.push(...generateProgrammingFlashcards(subj));
       });
-
-      const allCards = [...flashcards, ...newFlashcards];
-      setFlashcards(allCards);
-      saveFlashcards(allCards);
-
-      toast({
-        title: "Flashcards Generated! 🧠",
-        description: `Created ${newFlashcards.length} new flashcards from your topics`,
-      });
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate flashcards. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const markAsLearned = (cardId: string, learned: boolean) => {
-    const updatedCards = flashcards.map(card => {
-      if (card.id === cardId) {
-        return {
-          ...card,
-          isLearned: learned,
-          lastReviewed: new Date().toISOString(),
-          reviewCount: card.reviewCount + 1
-        };
-      }
-      return card;
-    });
-
-    setFlashcards(updatedCards);
-    saveFlashcards(updatedCards);
-
-    toast({
-      title: learned ? "Great job! 🎉" : "Keep practicing! 💪",
-      description: learned ? "Card marked as learned" : "Card marked for review",
-    });
-
-    // Auto advance to next card
-    if (currentCardIndex < filteredCards.length - 1) {
-      setCurrentCardIndex(currentCardIndex + 1);
+      setFlashcards(allNewCards);
     } else {
-      setCurrentCardIndex(0);
+      setFlashcards(newCards);
     }
+    setCurrentIndex(0);
     setIsFlipped(false);
   };
 
-  const nextCard = () => {
-    if (filteredCards.length === 0) return;
-    setCurrentCardIndex((prev) => (prev + 1) % filteredCards.length);
+  const handleFlip = () => {
+    setIsFlipped(!isFlipped);
+  };
+
+  const handleNext = () => {
+    if (currentIndex < filteredCards.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const markAsLearned = () => {
+    const updatedCards = flashcards.map(card => 
+      card.id === filteredCards[currentIndex]?.id 
+        ? { ...card, isLearned: true }
+        : card
+    );
+    setFlashcards(updatedCards);
+  };
+
+  const shuffleCards = () => {
+    const shuffled = [...filteredCards].sort(() => Math.random() - 0.5);
+    setFilteredCards(shuffled);
+    setCurrentIndex(0);
     setIsFlipped(false);
   };
 
-  const prevCard = () => {
-    if (filteredCards.length === 0) return;
-    setCurrentCardIndex((prev) => (prev - 1 + filteredCards.length) % filteredCards.length);
-    setIsFlipped(false);
-  };
+  const currentCard = filteredCards[currentIndex];
+  const progress = filteredCards.length > 0 ? ((currentIndex + 1) / filteredCards.length) * 100 : 0;
+  const learnedCount = flashcards.filter(card => card.isLearned).length;
 
-  const getSubjects = () => {
-    return [...new Set(flashcards.map(card => card.subject))];
-  };
-
-  const getStats = () => {
-    const total = flashcards.length;
-    const learned = flashcards.filter(card => card.isLearned).length;
-    const unlearned = total - learned;
-    const percentage = total > 0 ? Math.round((learned / total) * 100) : 0;
-    
-    return { total, learned, unlearned, percentage };
-  };
-
-  const stats = getStats();
-  const currentCard = filteredCards[currentCardIndex];
+  if (!currentCard) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Programming Flashcards</h2>
+            <p className="text-gray-600 dark:text-gray-400">Master programming concepts with interactive flashcards</p>
+          </div>
+          <Button onClick={generateNewFlashcards} className="bg-blue-600 hover:bg-blue-700">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Generate New Cards
+          </Button>
+        </div>
+        
+        <Card className="text-center py-12">
+          <CardContent>
+            <Code className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No flashcards available</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Generate some programming flashcards to start learning!</p>
+            <Button onClick={generateNewFlashcards}>Generate Flashcards</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI Flashcards</h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Study with AI-generated flashcards
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Programming Flashcards</h2>
+          <p className="text-gray-600 dark:text-gray-400">Learn programming concepts interactively</p>
         </div>
-        <Button 
-          onClick={generateFlashcards}
-          disabled={isGenerating}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-        >
-          {isGenerating ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Zap className="h-4 w-4 mr-2" />
-              Generate Cards
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={generateNewFlashcards} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            New Cards
+          </Button>
+          <Button onClick={shuffleCards} variant="outline">
+            <Shuffle className="h-4 w-4 mr-2" />
+            Shuffle
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-            <p className="text-sm text-gray-500">Total Cards</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total Cards</p>
+                <p className="text-2xl font-bold">{flashcards.length}</p>
+              </div>
+              <BookOpen className="h-8 w-8 text-blue-500" />
+            </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">{stats.learned}</div>
-            <p className="text-sm text-gray-500">Learned</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Learned</p>
+                <p className="text-2xl font-bold">{learnedCount}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500" />
+            </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-orange-600">{stats.unlearned}</div>
-            <p className="text-sm text-gray-500">To Review</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-600">{stats.percentage}%</div>
-            <p className="text-sm text-gray-500">Progress</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Progress</p>
+                <p className="text-2xl font-bold">{Math.round(progress)}%</p>
+              </div>
+              <Zap className="h-8 w-8 text-purple-500" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Progress Bar */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Learning Progress</span>
-            <span className="text-sm text-gray-500">{stats.learned}/{stats.total}</span>
-          </div>
-          <Progress value={stats.percentage} className="h-2" />
-        </CardContent>
-      </Card>
-
       {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search flashcards..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <Select value={filterSubject} onValueChange={setFilterSubject}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Subjects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subjects</SelectItem>
-                {getSubjects().map(subject => (
-                  <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Select subject" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Subjects</SelectItem>
+            {programmingSubjects.map(subject => (
+              <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        <Button
+          variant={showLearnedOnly ? "default" : "outline"}
+          onClick={() => setShowLearnedOnly(!showLearnedOnly)}
+        >
+          <Filter className="h-4 w-4 mr-2" />
+          {showLearnedOnly ? 'Show All' : 'Hide Learned'}
+        </Button>
+      </div>
 
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Cards" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cards</SelectItem>
-                <SelectItem value="learned">Learned</SelectItem>
-                <SelectItem value="unlearned">To Review</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Progress Bar */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+          <span>Card {currentIndex + 1} of {filteredCards.length}</span>
+          <span>{Math.round(progress)}% Complete</span>
+        </div>
+        <Progress value={progress} className="h-2" />
+      </div>
 
-            <Select value={studyMode} onValueChange={(value: 'all' | 'unlearned') => setStudyMode(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Study Mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cards</SelectItem>
-                <SelectItem value="unlearned">Review Mode</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Flashcard Viewer */}
-      {filteredCards.length === 0 ? (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {flashcards.length === 0 ? 'No Flashcards Yet' : 'No Cards Match Filters'}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {flashcards.length === 0 
-                ? 'Generate AI flashcards from your syllabus topics'
-                : 'Try adjusting your search or filter criteria'
-              }
-            </p>
-            {flashcards.length === 0 && (
-              <Button onClick={generateFlashcards} disabled={isGenerating}>
-                <Zap className="h-4 w-4 mr-2" />
-                Generate Your First Cards
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {/* Card Counter */}
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Card {currentCardIndex + 1} of {filteredCards.length}
-            </p>
-          </div>
-
-          {/* Flashcard */}
-          <div className="flex justify-center">
-            <div 
-              className="relative w-full max-w-2xl h-80 cursor-pointer perspective-1000"
-              onClick={() => setIsFlipped(!isFlipped)}
-            >
-              <div className={`relative w-full h-full transition-transform duration-600 transform-style-preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
-                {/* Front of card */}
-                <Card className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="bg-white/20 text-white">
-                        Question
-                      </Badge>
-                      <Badge className="bg-white/20 text-white">
-                        {currentCard?.difficulty}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-blue-100">
-                      {currentCard?.subject} • {currentCard?.topicTitle}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex items-center justify-center h-full">
-                    <p className="text-lg font-medium text-center px-6">
-                      {currentCard?.question}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* Back of card */}
-                <Card className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-green-500 to-teal-600 text-white">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="bg-white/20 text-white">
-                        Answer
-                      </Badge>
-                      <Badge className={`${currentCard?.isLearned ? 'bg-green-700' : 'bg-orange-500'} text-white`}>
-                        {currentCard?.isLearned ? 'Learned' : 'Review'}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex items-center justify-center h-full">
-                    <p className="text-lg font-medium text-center px-6">
-                      {currentCard?.answer}
-                    </p>
-                  </CardContent>
-                </Card>
+      {/* Flashcard */}
+      <div className="flex justify-center">
+        <div className="relative w-full max-w-2xl">
+          <Card 
+            className={`h-80 cursor-pointer transition-all duration-300 transform hover:scale-105 ${
+              isFlipped ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800'
+            }`}
+            onClick={handleFlip}
+          >
+            <CardHeader className="text-center">
+              <div className="flex items-center justify-between">
+                <Badge variant="outline">{currentCard.subject}</Badge>
+                <Badge variant={currentCard.difficulty === 'easy' ? 'default' : 
+                                currentCard.difficulty === 'medium' ? 'secondary' : 'destructive'}>
+                  {currentCard.difficulty}
+                </Badge>
               </div>
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center h-48 p-6">
+              <div className="text-center">
+                {!isFlipped ? (
+                  <>
+                    <Brain className="h-8 w-8 text-blue-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-4">Question:</h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">
+                      {currentCard.question}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+                      Click to reveal answer
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-4 text-green-600 dark:text-green-400">Answer:</h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">
+                      {currentCard.answer}
+                    </p>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
-          {/* Navigation and Actions */}
-          <div className="flex items-center justify-center space-x-4">
-            <Button variant="outline" onClick={prevCard}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+      {/* Controls */}
+      <div className="flex justify-center gap-4">
+        <Button 
+          onClick={handlePrevious} 
+          disabled={currentIndex === 0}
+          variant="outline"
+        >
+          Previous
+        </Button>
+        
+        <Button onClick={handleFlip} className="bg-blue-600 hover:bg-blue-700">
+          <RotateCcw className="h-4 w-4 mr-2" />
+          {isFlipped ? 'Show Question' : 'Show Answer'}
+        </Button>
+        
+        <Button 
+          onClick={handleNext} 
+          disabled={currentIndex === filteredCards.length - 1}
+          variant="outline"
+        >
+          Next
+        </Button>
+      </div>
 
-            <Button 
-              variant="outline" 
-              onClick={() => setIsFlipped(!isFlipped)}
-              className="min-w-[100px]"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              {isFlipped ? 'Show Question' : 'Show Answer'}
-            </Button>
-
-            <Button variant="outline" onClick={nextCard}>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Learning Actions */}
-          {isFlipped && currentCard && (
-            <div className="flex items-center justify-center space-x-4">
-              <Button
-                variant="outline"
-                onClick={() => markAsLearned(currentCard.id, false)}
-                className="text-orange-600 border-orange-600 hover:bg-orange-50"
-              >
-                <X className="h-4 w-4 mr-2" />
-                Need Review
-              </Button>
-              <Button
-                onClick={() => markAsLearned(currentCard.id, true)}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Got It!
-              </Button>
-            </div>
-          )}
-
-          {/* Instructions */}
-          <div className="text-center">
-            <p className="text-sm text-gray-500">
-              Click the card to flip, or use keyboard arrows to navigate
-            </p>
-          </div>
+      {/* Action Buttons */}
+      {isFlipped && (
+        <div className="flex justify-center gap-4">
+          <Button 
+            onClick={markAsLearned}
+            className="bg-green-600 hover:bg-green-700"
+            disabled={currentCard.isLearned}
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            {currentCard.isLearned ? 'Already Learned' : 'Mark as Learned'}
+          </Button>
         </div>
       )}
     </div>
