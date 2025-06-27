@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,9 +14,9 @@ import {
   Calendar, 
   Edit3, 
   Trash2, 
-  Upload,
-  GripVertical,
-  Clock
+  Clock,
+  Save,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,6 +40,29 @@ interface NewTopicForm {
   estimatedHours: number;
 }
 
+const PROGRAMMING_SUBJECTS = [
+  'JavaScript',
+  'Python',
+  'Java',
+  'C++',
+  'C#',
+  'HTML',
+  'CSS',
+  'React',
+  'Node.js',
+  'TypeScript',
+  'PHP',
+  'Ruby',
+  'Go',
+  'Rust',
+  'Swift',
+  'Kotlin',
+  'SQL',
+  'MongoDB',
+  'Docker',
+  'AWS'
+];
+
 const SyllabusManager = () => {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isAddingTopic, setIsAddingTopic] = useState(false);
@@ -54,46 +78,9 @@ const SyllabusManager = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved topics
     const savedTopics = localStorage.getItem('studygenie_topics');
     if (savedTopics) {
       setTopics(JSON.parse(savedTopics));
-    } else {
-      // Sample data for demonstration
-      const sampleTopics: Topic[] = [
-        {
-          id: '1',
-          title: 'Calculus Integration',
-          description: 'Learn integration techniques including substitution, parts, and partial fractions',
-          subject: 'Mathematics',
-          deadline: '2024-07-15',
-          priority: 'high',
-          status: 'in-progress',
-          estimatedHours: 4
-        },
-        {
-          id: '2',
-          title: 'Quantum Mechanics Basics',
-          description: 'Introduction to wave functions, operators, and quantum states',
-          subject: 'Physics',
-          deadline: '2024-07-20',
-          priority: 'medium',
-          status: 'not-started',
-          estimatedHours: 6
-        },
-        {
-          id: '3',
-          title: 'Organic Chemistry Reactions',
-          description: 'Study major organic reaction mechanisms and synthesis pathways',
-          subject: 'Chemistry',
-          deadline: '2024-07-18',
-          priority: 'high',
-          status: 'not-started',
-          estimatedHours: 5
-        }
-      ];
-      setTopics(sampleTopics);
-      localStorage.setItem('studygenie_topics', JSON.stringify(sampleTopics));
     }
   }, []);
 
@@ -134,6 +121,25 @@ const SyllabusManager = () => {
     toast({
       title: "Success!",
       description: "Topic added to your syllabus",
+    });
+  };
+
+  const handleEditTopic = (topic: Topic) => {
+    setEditingTopic(topic);
+  };
+
+  const handleUpdateTopic = () => {
+    if (!editingTopic) return;
+
+    const updatedTopics = topics.map(topic =>
+      topic.id === editingTopic.id ? editingTopic : topic
+    );
+    saveTopics(updatedTopics);
+    setEditingTopic(null);
+
+    toast({
+      title: "Success!",
+      description: "Topic updated successfully",
     });
   };
 
@@ -191,7 +197,7 @@ const SyllabusManager = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Syllabus Manager</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Organize and track your study topics
+            Organize and track your programming topics
           </p>
         </div>
         <Dialog open={isAddingTopic} onOpenChange={setIsAddingTopic}>
@@ -212,18 +218,29 @@ const SyllabusManager = () => {
                   id="title"
                   value={newTopic.title}
                   onChange={(e) => setNewTopic(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Calculus Integration"
+                  placeholder="e.g., React Hooks, Python Loops"
                 />
               </div>
               
               <div>
                 <Label htmlFor="subject">Subject *</Label>
-                <Input
-                  id="subject"
-                  value={newTopic.subject}
-                  onChange={(e) => setNewTopic(prev => ({ ...prev, subject: e.target.value }))}
-                  placeholder="e.g., Mathematics"
-                />
+                <Select 
+                  value={newTopic.subject} 
+                  onValueChange={(value) => 
+                    setNewTopic(prev => ({ ...prev, subject: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a programming language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROGRAMMING_SUBJECTS.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -253,7 +270,7 @@ const SyllabusManager = () => {
                     id="hours"
                     type="number"
                     min="1"
-                    max="20"
+                    max="50"
                     value={newTopic.estimatedHours}
                     onChange={(e) => setNewTopic(prev => ({ ...prev, estimatedHours: parseInt(e.target.value) || 2 }))}
                   />
@@ -292,6 +309,110 @@ const SyllabusManager = () => {
         </Dialog>
       </div>
 
+      {/* Edit Topic Dialog */}
+      <Dialog open={!!editingTopic} onOpenChange={() => setEditingTopic(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Topic</DialogTitle>
+          </DialogHeader>
+          {editingTopic && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-title">Topic Title *</Label>
+                <Input
+                  id="edit-title"
+                  value={editingTopic.title}
+                  onChange={(e) => setEditingTopic(prev => prev ? { ...prev, title: e.target.value } : null)}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-subject">Subject *</Label>
+                <Select 
+                  value={editingTopic.subject} 
+                  onValueChange={(value) => 
+                    setEditingTopic(prev => prev ? { ...prev, subject: value } : null)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROGRAMMING_SUBJECTS.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editingTopic.description}
+                  onChange={(e) => setEditingTopic(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-deadline">Deadline *</Label>
+                  <Input
+                    id="edit-deadline"
+                    type="date"
+                    value={editingTopic.deadline}
+                    onChange={(e) => setEditingTopic(prev => prev ? { ...prev, deadline: e.target.value } : null)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-hours">Est. Hours</Label>
+                  <Input
+                    id="edit-hours"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={editingTopic.estimatedHours}
+                    onChange={(e) => setEditingTopic(prev => prev ? { ...prev, estimatedHours: parseInt(e.target.value) || 2 } : null)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-priority">Priority</Label>
+                <Select 
+                  value={editingTopic.priority} 
+                  onValueChange={(value: 'high' | 'medium' | 'low') => 
+                    setEditingTopic(prev => prev ? { ...prev, priority: value } : null)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setEditingTopic(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateTopic}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Update Topic
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Topics Grid */}
       <div className="grid gap-6">
         {topics.length === 0 ? (
@@ -302,7 +423,7 @@ const SyllabusManager = () => {
                 No topics yet
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Start by adding your first study topic to get organized!
+                Start by adding your first programming topic to get organized!
               </p>
               <Button onClick={() => setIsAddingTopic(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -335,7 +456,11 @@ const SyllabusManager = () => {
                       )}
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEditTopic(topic)}
+                      >
                         <Edit3 className="h-4 w-4" />
                       </Button>
                       <Button 

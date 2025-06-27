@@ -6,10 +6,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Clock, Target, Zap, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  Calendar,
+  Clock,
+  Target,
+  Zap,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  BookOpen,
+  TrendingUp,
+  Users,
+  Brain
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-interface StudyTask {
+interface StudySession {
   id: string;
   topicId: string;
   topicTitle: string;
@@ -18,423 +33,478 @@ interface StudyTask {
   startTime: string;
   endTime: string;
   duration: number;
-  status: 'pending' | 'completed' | 'missed';
-  priority: 'high' | 'medium' | 'low';
+  status: 'scheduled' | 'completed' | 'missed';
+  notes?: string;
 }
 
 interface StudyPlan {
   id: string;
-  createdAt: string;
-  totalHours: number;
+  name: string;
+  startDate: string;
+  endDate: string;
   dailyHours: number;
-  tasks: StudyTask[];
+  sessions: StudySession[];
+  createdAt: string;
 }
 
 const StudyPlanGenerator = () => {
-  const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null);
+  const [studyPlans, setStudyPlans] = useState<StudyPlan[]>([]);
+  const [activePlan, setActivePlan] = useState<StudyPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [settings, setSettings] = useState({
-    dailyHours: 4,
-    preferredStartTime: '09:00',
-    preferredEndTime: '18:00',
-    breakDuration: 15
+  const [planSettings, setPlanSettings] = useState({
+    name: '',
+    startDate: '',
+    endDate: '',
+    dailyHours: 2,
+    selectedTopics: [] as string[]
   });
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [todaysSessions, setTodaysSessions] = useState<StudySession[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load existing study plan
-    const savedPlan = localStorage.getItem('studygenie_study_plan');
-    if (savedPlan) {
-      setStudyPlan(JSON.parse(savedPlan));
-    }
+    loadStudyPlans();
+    loadTodaysSessions();
   }, []);
 
-  const generateAIStudyPlan = async () => {
-    setIsGenerating(true);
-    
-    try {
-      // Get topics from syllabus
-      const savedTopics = localStorage.getItem('studygenie_topics');
-      const topics = savedTopics ? JSON.parse(savedTopics) : [];
-      
-      if (topics.length === 0) {
-        toast({
-          title: "No Topics Found",
-          description: "Please add some topics to your syllabus first",
-          variant: "destructive"
-        });
-        setIsGenerating(false);
-        return;
+  const loadStudyPlans = () => {
+    const saved = localStorage.getItem('studygenie_study_plans');
+    if (saved) {
+      const plans = JSON.parse(saved);
+      setStudyPlans(plans);
+      if (plans.length > 0) {
+        setActivePlan(plans[0]);
       }
+    }
+  };
 
-      // Simulate AI-powered study plan generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  const loadTodaysSessions = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const saved = localStorage.getItem('studygenie_study_plans');
+    if (saved) {
+      const plans = JSON.parse(saved);
+      const allSessions = plans.flatMap((plan: StudyPlan) => plan.sessions);
+      const todaysSessions = allSessions.filter((session: StudySession) => session.date === today);
+      setTodaysSessions(todaysSessions);
+    }
+  };
 
-      const tasks: StudyTask[] = [];
-      const startDate = new Date();
+  const saveStudyPlans = (plans: StudyPlan[]) => {
+    setStudyPlans(plans);
+    localStorage.setItem('studygenie_study_plans', JSON.stringify(plans));
+  };
+
+  const getTopicsFromSyllabus = () => {
+    const saved = localStorage.getItem('studygenie_topics');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return [];
+  };
+
+  const generateStudyPlan = () => {
+    if (!planSettings.name || !planSettings.startDate || !planSettings.endDate) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (planSettings.selectedTopics.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one topic",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+
+    setTimeout(() => {
+      const topics = getTopicsFromSyllabus();
+      const selectedTopics = topics.filter((topic: any) => 
+        planSettings.selectedTopics.includes(topic.id)
+      );
+
+      const sessions: StudySession[] = [];
+      const startDate = new Date(planSettings.startDate);
+      const endDate = new Date(planSettings.endDate);
+      const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Sort topics by deadline and priority
-      const sortedTopics = topics
-        .filter((topic: any) => topic.status !== 'completed')
-        .sort((a: any, b: any) => {
-          const dateA = new Date(a.deadline);
-          const dateB = new Date(b.deadline);
-          if (dateA.getTime() === dateB.getTime()) {
-            const priorityOrder = { high: 3, medium: 2, low: 1 };
-            return priorityOrder[b.priority] - priorityOrder[a.priority];
-          }
-          return dateA.getTime() - dateB.getTime();
-        });
+      let currentDate = new Date(startDate);
+      let topicIndex = 0;
 
-      // Generate tasks for the next 14 days
-      for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(startDate.getDate() + dayOffset);
-        
-        // Skip weekends (optional - can be made configurable)
-        if (currentDate.getDay() === 0 || currentDate.getDay() === 6) continue;
-        
-        let remainingHours = settings.dailyHours;
-        let currentTime = new Date(`${currentDate.toISOString().split('T')[0]}T${settings.preferredStartTime}`);
-        
-        for (const topic of sortedTopics) {
-          if (remainingHours <= 0) break;
-          
-          const sessionDuration = Math.min(
-            remainingHours,
-            Math.min(2, topic.estimatedHours), // Max 2 hours per session
-            1.5 // Default session length
-          );
-          
-          if (sessionDuration < 0.5) break; // Skip very short sessions
-          
-          const endTime = new Date(currentTime);
-          endTime.setHours(endTime.getHours() + sessionDuration);
-          
-          tasks.push({
-            id: `${topic.id}-${dayOffset}-${tasks.length}`,
-            topicId: topic.id,
-            topicTitle: topic.title,
-            subject: topic.subject,
-            date: currentDate.toISOString().split('T')[0],
-            startTime: currentTime.toTimeString().slice(0, 5),
-            endTime: endTime.toTimeString().slice(0, 5),
-            duration: sessionDuration,
-            status: 'pending',
-            priority: topic.priority
-          });
-          
-          // Add break time
-          currentTime = new Date(endTime);
-          currentTime.setMinutes(currentTime.getMinutes() + settings.breakDuration);
-          
-          remainingHours -= sessionDuration;
+      for (let day = 0; day <= totalDays; day++) {
+        if (currentDate > endDate) break;
+
+        // Skip weekends (optional)
+        const dayOfWeek = currentDate.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
         }
+
+        const topic = selectedTopics[topicIndex % selectedTopics.length];
+        const sessionId = `session-${Date.now()}-${day}`;
+        
+        const session: StudySession = {
+          id: sessionId,
+          topicId: topic.id,
+          topicTitle: topic.title,
+          subject: topic.subject,
+          date: currentDate.toISOString().split('T')[0],
+          startTime: '09:00',
+          endTime: `${9 + planSettings.dailyHours}:00`,
+          duration: planSettings.dailyHours,
+          status: 'scheduled'
+        };
+
+        sessions.push(session);
+        topicIndex++;
+        currentDate.setDate(currentDate.getDate() + 1);
       }
 
       const newPlan: StudyPlan = {
         id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        totalHours: tasks.reduce((sum, task) => sum + task.duration, 0),
-        dailyHours: settings.dailyHours,
-        tasks
+        name: planSettings.name,
+        startDate: planSettings.startDate,
+        endDate: planSettings.endDate,
+        dailyHours: planSettings.dailyHours,
+        sessions,
+        createdAt: new Date().toISOString()
       };
 
-      setStudyPlan(newPlan);
-      localStorage.setItem('studygenie_study_plan', JSON.stringify(newPlan));
+      const updatedPlans = [...studyPlans, newPlan];
+      saveStudyPlans(updatedPlans);
+      setActivePlan(newPlan);
+      loadTodaysSessions();
 
-      toast({
-        title: "Study Plan Generated! 🎉",
-        description: `Created ${tasks.length} study sessions over 14 days`,
+      // Reset form
+      setPlanSettings({
+        name: '',
+        startDate: '',
+        endDate: '',
+        dailyHours: 2,
+        selectedTopics: []
       });
 
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate study plan. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
       setIsGenerating(false);
-    }
+
+      toast({
+        title: "Study Plan Created! 📚",
+        description: `Generated ${sessions.length} study sessions`,
+      });
+    }, 2000);
   };
 
-  const markTaskComplete = (taskId: string) => {
-    if (!studyPlan) return;
+  const updateSessionStatus = (sessionId: string, status: StudySession['status'], notes?: string) => {
+    const updatedPlans = studyPlans.map(plan => ({
+      ...plan,
+      sessions: plan.sessions.map(session =>
+        session.id === sessionId 
+          ? { ...session, status, notes: notes || session.notes }
+          : session
+      )
+    }));
 
-    const updatedTasks = studyPlan.tasks.map(task =>
-      task.id === taskId ? { ...task, status: 'completed' as const } : task
-    );
-
-    const updatedPlan = { ...studyPlan, tasks: updatedTasks };
-    setStudyPlan(updatedPlan);
-    localStorage.setItem('studygenie_study_plan', JSON.stringify(updatedPlan));
+    saveStudyPlans(updatedPlans);
+    if (activePlan) {
+      const updatedActivePlan = updatedPlans.find(p => p.id === activePlan.id);
+      if (updatedActivePlan) {
+        setActivePlan(updatedActivePlan);
+      }
+    }
+    loadTodaysSessions();
 
     toast({
-      title: "Great job! 🎉",
-      description: "Task marked as completed",
+      title: "Session Updated",
+      description: `Session marked as ${status}`,
     });
   };
 
-  const getTodaysTasks = () => {
-    if (!studyPlan) return [];
-    const today = new Date().toISOString().split('T')[0];
-    return studyPlan.tasks.filter(task => task.date === today);
-  };
-
-  const getSelectedDateTasks = () => {
-    if (!studyPlan) return [];
-    return studyPlan.tasks.filter(task => task.date === selectedDate);
-  };
-
-  const getCompletionStats = () => {
-    if (!studyPlan) return { completed: 0, total: 0, percentage: 0 };
+  const getStats = () => {
+    if (!activePlan) return { total: 0, completed: 0, percentage: 0 };
     
-    const completed = studyPlan.tasks.filter(task => task.status === 'completed').length;
-    const total = studyPlan.tasks.length;
+    const total = activePlan.sessions.length;
+    const completed = activePlan.sessions.filter(s => s.status === 'completed').length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     
-    return { completed, total, percentage };
+    return { total, completed, percentage };
   };
 
-  const stats = getCompletionStats();
-  const todaysTasks = getTodaysTasks();
-  const selectedTasks = getSelectedDateTasks();
+  const getUpcomingSessions = () => {
+    if (!activePlan) return [];
+    
+    const today = new Date().toISOString().split('T')[0];
+    return activePlan.sessions
+      .filter(session => session.date >= today && session.status === 'scheduled')
+      .slice(0, 5);
+  };
+
+  const topics = getTopicsFromSyllabus();
+  const stats = getStats();
+  const upcomingSessions = getUpcomingSessions();
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI Study Plan</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Study Plan Generator</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Let AI create your personalized study schedule
+            Create personalized study schedules based on your syllabus
           </p>
         </div>
-        <Button 
-          onClick={generateAIStudyPlan}
-          disabled={isGenerating}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-        >
-          {isGenerating ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Zap className="h-4 w-4 mr-2" />
-              {studyPlan ? 'Regenerate Plan' : 'Generate Plan'}
-            </>
-          )}
-        </Button>
       </div>
 
-      {/* Settings */}
+      {/* Create New Plan */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Study Preferences</CardTitle>
-          <CardDescription>Customize your study schedule</CardDescription>
+          <CardTitle>Create New Study Plan</CardTitle>
+          <CardDescription>Generate a personalized study schedule</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="dailyHours">Daily Hours</Label>
-              <Input
-                id="dailyHours"
-                type="number"
-                min="1"
-                max="12"
-                value={settings.dailyHours}
-                onChange={(e) => setSettings(prev => ({ ...prev, dailyHours: parseInt(e.target.value) || 4 }))}
-              />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="plan-name">Plan Name *</Label>
+                <Input
+                  id="plan-name"
+                  value={planSettings.name}
+                  onChange={(e) => setPlanSettings(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., JavaScript Mastery Plan"
+                />
+              </div>
+              <div>
+                <Label htmlFor="daily-hours">Daily Study Hours</Label>
+                <Select 
+                  value={planSettings.dailyHours.toString()} 
+                  onValueChange={(value) => setPlanSettings(prev => ({ ...prev, dailyHours: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 hour</SelectItem>
+                    <SelectItem value="2">2 hours</SelectItem>
+                    <SelectItem value="3">3 hours</SelectItem>
+                    <SelectItem value="4">4 hours</SelectItem>
+                    <SelectItem value="5">5 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="startTime">Preferred Start</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={settings.preferredStartTime}
-                onChange={(e) => setSettings(prev => ({ ...prev, preferredStartTime: e.target.value }))}
-              />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-date">Start Date *</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={planSettings.startDate}
+                  onChange={(e) => setPlanSettings(prev => ({ ...prev, startDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="end-date">End Date *</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={planSettings.endDate}
+                  onChange={(e) => setPlanSettings(prev => ({ ...prev, endDate: e.target.value }))}
+                />
+              </div>
             </div>
+
             <div>
-              <Label htmlFor="endTime">Preferred End</Label>
-              <Input
-                id="endTime"
-                type="time"
-                value={settings.preferredEndTime}
-                onChange={(e) => setSettings(prev => ({ ...prev, preferredEndTime: e.target.value }))}
-              />
+              <Label>Select Topics to Include *</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto border rounded p-3">
+                {topics.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No topics found. Please add topics to your syllabus first.</p>
+                ) : (
+                  topics.map((topic: any) => (
+                    <div key={topic.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={topic.id}
+                        checked={planSettings.selectedTopics.includes(topic.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setPlanSettings(prev => ({
+                              ...prev,
+                              selectedTopics: [...prev.selectedTopics, topic.id]
+                            }));
+                          } else {
+                            setPlanSettings(prev => ({
+                              ...prev,
+                              selectedTopics: prev.selectedTopics.filter(id => id !== topic.id)
+                            }));
+                          }
+                        }}
+                      />
+                      <Label htmlFor={topic.id} className="text-sm">
+                        {topic.title} ({topic.subject})
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-            <div>
-              <Label htmlFor="breakDuration">Break (minutes)</Label>
-              <Input
-                id="breakDuration"
-                type="number"
-                min="5"
-                max="60"
-                value={settings.breakDuration}
-                onChange={(e) => setSettings(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 15 }))}
-              />
-            </div>
+
+            <Button 
+              onClick={generateStudyPlan}
+              disabled={isGenerating}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Generating Plan...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Generate Study Plan
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {studyPlan && (
-        <>
-          {/* Progress Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Overall Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Completed Tasks</span>
-                    <span>{stats.completed}/{stats.total}</span>
-                  </div>
-                  <Progress value={stats.percentage} className="h-2" />
-                  <p className="text-xs text-gray-500">{stats.percentage}% complete</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Total Study Hours</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{studyPlan.totalHours.toFixed(1)}h</div>
-                <p className="text-sm text-gray-500">Across all topics</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Today's Sessions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{todaysTasks.length}</div>
-                <p className="text-sm text-gray-500">
-                  {todaysTasks.filter(t => t.status === 'completed').length} completed
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Today's Schedule */}
+      {/* Active Plan Overview */}
+      {activePlan && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Calendar className="h-5 w-5" />
-                <span>Today's Schedule</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {todaysTasks.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No study sessions scheduled for today</p>
-              ) : (
-                <div className="space-y-3">
-                  {todaysTasks.map((task) => (
-                    <div key={task.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          {task.status === 'completed' ? (
-                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-5 w-5 text-orange-500" />
-                          )}
-                          <div>
-                            <p className="font-medium">{task.topicTitle}</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {task.subject} • {task.startTime} - {task.endTime} ({task.duration}h)
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={task.priority === 'high' ? 'destructive' : 'secondary'}>
-                          {task.priority}
-                        </Badge>
-                        {task.status !== 'completed' && (
-                          <Button size="sm" onClick={() => markTaskComplete(task.id)}>
-                            Mark Done
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+              <p className="text-sm text-gray-500">Total Sessions</p>
             </CardContent>
           </Card>
-
-          {/* Calendar View */}
           <Card>
-            <CardHeader>
-              <CardTitle>Study Calendar</CardTitle>
-              <CardDescription>View your schedule by date</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <Label htmlFor="dateSelect">Select Date:</Label>
-                  <Input
-                    id="dateSelect"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-auto"
-                  />
-                </div>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <p className="text-sm text-gray-500">Completed</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-purple-600">{stats.percentage}%</div>
+              <p className="text-sm text-gray-500">Progress</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-                {selectedTasks.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    No study sessions scheduled for {new Date(selectedDate).toLocaleDateString()}
-                  </p>
+      {/* Today's Sessions */}
+      {todaysSessions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Today's Study Sessions</CardTitle>
+            <CardDescription>Your scheduled sessions for today</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {todaysSessions.map((session) => (
+                <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {session.status === 'completed' ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : session.status === 'missed' ? (
+                      <AlertCircle className="h-5 w-5 text-red-500" />
+                    ) : (
+                      <Clock className="h-5 w-5 text-blue-500" />
+                    )}
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {session.topicTitle}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {session.subject} • {session.startTime} - {session.endTime} ({session.duration}h)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    {session.status !== 'completed' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateSessionStatus(session.id, 'completed')}
+                      >
+                        Mark Complete
+                      </Button>
+                    )}
+                    {session.status === 'scheduled' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateSessionStatus(session.id, 'missed')}
+                      >
+                        Mark Missed
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Active Plan Details */}
+      {activePlan && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{activePlan.name}</CardTitle>
+                <CardDescription>
+                  {new Date(activePlan.startDate).toLocaleDateString()} - {new Date(activePlan.endDate).toLocaleDateString()}
+                </CardDescription>
+              </div>
+              <Badge variant="secondary">
+                {activePlan.dailyHours}h/day
+              </Badge>
+            </div>
+            <Progress value={stats.percentage} className="h-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Upcoming Sessions</h4>
+                {upcomingSessions.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No upcoming sessions</p>
                 ) : (
-                  <div className="space-y-3">
-                    {selectedTasks.map((task) => (
-                      <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Clock className="h-4 w-4 text-gray-400" />
-                          <div>
-                            <p className="font-medium">{task.topicTitle}</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {task.startTime} - {task.endTime} • {task.subject}
-                            </p>
-                          </div>
+                  <div className="space-y-2">
+                    {upcomingSessions.map((session) => (
+                      <div key={session.id} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                        <div>
+                          <p className="font-medium">{session.topicTitle}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {new Date(session.date).toLocaleDateString()} • {session.startTime} - {session.endTime}
+                          </p>
                         </div>
-                        <Badge className={task.status === 'completed' ? 'bg-green-100 text-green-800' : ''}>
-                          {task.status}
-                        </Badge>
+                        <Badge variant="outline">{session.subject}</Badge>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {!studyPlan && (
+      {/* No Active Plan */}
+      {!activePlan && studyPlans.length === 0 && (
         <Card className="text-center py-12">
           <CardContent>
-            <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No Study Plan Yet
+              No Study Plans Yet
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Generate an AI-powered study plan based on your syllabus and preferences
+              Create your first study plan to get organized and stay on track
             </p>
-            <Button onClick={generateAIStudyPlan} disabled={isGenerating}>
-              <Zap className="h-4 w-4 mr-2" />
-              Create Your First Plan
-            </Button>
           </CardContent>
         </Card>
       )}

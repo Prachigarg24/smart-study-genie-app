@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Trophy,
   Clock,
@@ -14,7 +15,8 @@ import {
   Zap,
   RefreshCw,
   Target,
-  Award
+  Award,
+  Filter
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -46,6 +48,102 @@ interface QuizResult {
   completedAt: string;
 }
 
+const PROGRAMMING_SUBJECTS = [
+  'JavaScript',
+  'Python',
+  'Java',
+  'C++',
+  'C#',
+  'HTML',
+  'CSS',
+  'React',
+  'Node.js',
+  'TypeScript',
+  'PHP',
+  'Ruby',
+  'Go',
+  'Rust',
+  'Swift',
+  'Kotlin',
+  'SQL',
+  'MongoDB',
+  'Docker',
+  'AWS'
+];
+
+const SAMPLE_QUESTIONS: { [key: string]: Question[] } = {
+  JavaScript: [
+    {
+      id: 'js1',
+      question: 'What is the correct way to declare a variable in JavaScript?',
+      options: ['var x = 5;', 'variable x = 5;', 'v x = 5;', 'declare x = 5;'],
+      correctAnswer: 0,
+      explanation: 'In JavaScript, variables are declared using var, let, or const keywords.',
+      difficulty: 'easy'
+    },
+    {
+      id: 'js2',
+      question: 'Which method is used to add an element at the end of an array?',
+      options: ['append()', 'push()', 'add()', 'insert()'],
+      correctAnswer: 1,
+      explanation: 'The push() method adds one or more elements to the end of an array.',
+      difficulty: 'medium'
+    },
+    {
+      id: 'js3',
+      question: 'What does "this" keyword refer to in JavaScript?',
+      options: ['The current function', 'The global object', 'The object that owns the method', 'The parent object'],
+      correctAnswer: 2,
+      explanation: 'In JavaScript, "this" refers to the object that is executing the current function.',
+      difficulty: 'hard'
+    }
+  ],
+  Python: [
+    {
+      id: 'py1',
+      question: 'Which of the following is the correct way to create a list in Python?',
+      options: ['list = []', 'list = ()', 'list = {}', 'list = ""'],
+      correctAnswer: 0,
+      explanation: 'Square brackets [] are used to create lists in Python.',
+      difficulty: 'easy'
+    },
+    {
+      id: 'py2',
+      question: 'What is the output of print(2 ** 3) in Python?',
+      options: ['6', '8', '9', '5'],
+      correctAnswer: 1,
+      explanation: 'The ** operator is used for exponentiation in Python. 2**3 = 8.',
+      difficulty: 'medium'
+    },
+    {
+      id: 'py3',
+      question: 'Which method is used to remove whitespace from both ends of a string?',
+      options: ['strip()', 'trim()', 'remove()', 'clean()'],
+      correctAnswer: 0,
+      explanation: 'The strip() method removes whitespace from both ends of a string in Python.',
+      difficulty: 'medium'
+    }
+  ],
+  React: [
+    {
+      id: 'react1',
+      question: 'What is JSX in React?',
+      options: ['A JavaScript library', 'A syntax extension for JavaScript', 'A CSS framework', 'A database'],
+      correctAnswer: 1,
+      explanation: 'JSX is a syntax extension for JavaScript that allows you to write HTML-like code in JavaScript.',
+      difficulty: 'easy'
+    },
+    {
+      id: 'react2',
+      question: 'Which hook is used to manage state in functional components?',
+      options: ['useEffect', 'useState', 'useContext', 'useReducer'],
+      correctAnswer: 1,
+      explanation: 'useState is the React hook used to add state to functional components.',
+      difficulty: 'medium'
+    }
+  ]
+};
+
 const QuizInterface = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
@@ -55,6 +153,8 @@ const QuizInterface = () => {
   const [showResults, setShowResults] = useState(false);
   const [quizStartTime, setQuizStartTime] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [filterSubject, setFilterSubject] = useState<string>('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -66,35 +166,6 @@ const QuizInterface = () => {
     const saved = localStorage.getItem('studygenie_quizzes');
     if (saved) {
       setQuizzes(JSON.parse(saved));
-    } else {
-      // Sample quiz for demonstration
-      const sampleQuiz: Quiz = {
-        id: '1',
-        topicId: '1',
-        topicTitle: 'Calculus Integration',
-        subject: 'Mathematics',
-        questions: [
-          {
-            id: '1',
-            question: 'What is the integral of x² dx?',
-            options: ['x³/3 + C', 'x³ + C', '2x + C', 'x²/2 + C'],
-            correctAnswer: 0,
-            explanation: 'When integrating x^n, we use the power rule: ∫x^n dx = x^(n+1)/(n+1) + C',
-            difficulty: 'medium'
-          },
-          {
-            id: '2',
-            question: 'What is the derivative of sin(x)?',
-            options: ['cos(x)', '-cos(x)', 'tan(x)', '-sin(x)'],
-            correctAnswer: 0,
-            explanation: 'The derivative of sin(x) is cos(x), which is a fundamental derivative rule.',
-            difficulty: 'easy'
-          }
-        ],
-        createdAt: new Date().toISOString()
-      };
-      setQuizzes([sampleQuiz]);
-      localStorage.setItem('studygenie_quizzes', JSON.stringify([sampleQuiz]));
     }
   };
 
@@ -115,96 +186,97 @@ const QuizInterface = () => {
     localStorage.setItem('studygenie_quiz_results', JSON.stringify(results));
   };
 
-  const generateQuizzes = async () => {
+  const generateQuizForSubject = (subject: string) => {
     setIsGenerating(true);
     
-    try {
-      const topics = JSON.parse(localStorage.getItem('studygenie_topics') || '[]');
+    setTimeout(() => {
+      const questions = SAMPLE_QUESTIONS[subject] || [];
       
-      if (topics.length === 0) {
-        toast({
-          title: "No Topics Found",
-          description: "Please add some topics to your syllabus first",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Simulate AI generation
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const newQuizzes: Quiz[] = [];
-      
-      topics.forEach((topic: any) => {
-        const sampleQuestions: Question[] = [
+      if (questions.length === 0) {
+        // Generate generic questions for subjects without predefined questions
+        const genericQuestions: Question[] = [
           {
-            id: `${topic.id}-q1`,
-            question: `What are the fundamental principles of ${topic.title}?`,
+            id: `${subject.toLowerCase()}-1`,
+            question: `What is a fundamental concept in ${subject}?`,
             options: [
-              `Core concepts and applications`,
-              `Basic definitions only`,
-              `Historical background`,
-              `Future developments`
+              'Basic syntax and structure',
+              'Only advanced features',
+              'Historical background only',
+              'Not applicable'
             ],
             correctAnswer: 0,
-            explanation: `The fundamental principles include the core concepts, their applications, and theoretical foundations.`,
-            difficulty: 'medium'
-          },
-          {
-            id: `${topic.id}-q2`,
-            question: `How is ${topic.title} applied in real-world scenarios?`,
-            options: [
-              `Through theoretical models only`,
-              `Via practical implementations and problem-solving`,
-              `Only in academic research`,
-              `Not applicable in real world`
-            ],
-            correctAnswer: 1,
-            explanation: `${topic.title} has numerous practical applications that solve real-world problems.`,
-            difficulty: 'medium'
-          },
-          {
-            id: `${topic.id}-q3`,
-            question: `What makes ${topic.title} important in ${topic.subject}?`,
-            options: [
-              `It's just another topic`,
-              `It forms the foundation for advanced concepts`,
-              `It's only for beginners`,
-              `It has no significance`
-            ],
-            correctAnswer: 1,
-            explanation: `${topic.title} is crucial as it provides the foundation for understanding more advanced concepts in ${topic.subject}.`,
+            explanation: `Understanding basic syntax and structure is fundamental to learning ${subject}.`,
             difficulty: 'easy'
+          },
+          {
+            id: `${subject.toLowerCase()}-2`,
+            question: `How is ${subject} commonly used in software development?`,
+            options: [
+              'Only for academic purposes',
+              'For building applications and solving problems',
+              'Not used in development',
+              'Only for documentation'
+            ],
+            correctAnswer: 1,
+            explanation: `${subject} is widely used in software development for building applications and solving real-world problems.`,
+            difficulty: 'medium'
+          },
+          {
+            id: `${subject.toLowerCase()}-3`,
+            question: `What makes ${subject} valuable for developers?`,
+            options: [
+              'It has no practical value',
+              'It provides tools and features for efficient development',
+              'It\'s only for beginners',
+              'It\'s outdated technology'
+            ],
+            correctAnswer: 1,
+            explanation: `${subject} provides valuable tools and features that help developers write efficient, maintainable code.`,
+            difficulty: 'medium'
           }
         ];
-
-        newQuizzes.push({
-          id: `quiz-${topic.id}-${Date.now()}`,
-          topicId: topic.id,
-          topicTitle: topic.title,
-          subject: topic.subject,
-          questions: sampleQuestions,
+        
+        const newQuiz: Quiz = {
+          id: `quiz-${subject}-${Date.now()}`,
+          topicId: subject,
+          topicTitle: `${subject} Fundamentals`,
+          subject: subject,
+          questions: genericQuestions,
           createdAt: new Date().toISOString()
-        });
-      });
+        };
 
-      const allQuizzes = [...quizzes, ...newQuizzes];
-      saveQuizzes(allQuizzes);
+        const updatedQuizzes = [...quizzes, newQuiz];
+        saveQuizzes(updatedQuizzes);
+        setIsGenerating(false);
+        startQuiz(newQuiz);
+      } else {
+        // Shuffle and select random questions
+        const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
+        const selectedQuestions = shuffledQuestions.slice(0, Math.min(3, shuffledQuestions.length));
+        
+        const newQuiz: Quiz = {
+          id: `quiz-${subject}-${Date.now()}`,
+          topicId: subject,
+          topicTitle: `${subject} Quiz`,
+          subject: subject,
+          questions: selectedQuestions.map(q => ({
+            ...q,
+            id: `${q.id}-${Date.now()}`
+          })),
+          createdAt: new Date().toISOString()
+        };
+
+        const updatedQuizzes = [...quizzes, newQuiz];
+        saveQuizzes(updatedQuizzes);
+        setIsGenerating(false);
+        startQuiz(newQuiz);
+      }
 
       toast({
-        title: "Quizzes Generated! 🧠",
-        description: `Created ${newQuizzes.length} new quizzes from your topics`,
+        title: "Quiz Generated! 🧠",
+        description: `New ${subject} quiz created and started`,
       });
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate quizzes. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGenerating(false);
-    }
+    }, 2000);
   };
 
   const startQuiz = (quiz: Quiz) => {
@@ -273,10 +345,9 @@ const QuizInterface = () => {
   };
 
   const retakeQuiz = () => {
-    setCurrentQuestionIndex(0);
-    setSelectedAnswers({});
-    setShowResults(false);
-    setQuizStartTime(Date.now());
+    if (activeQuiz) {
+      generateQuizForSubject(activeQuiz.subject);
+    }
   };
 
   const exitQuiz = () => {
@@ -298,9 +369,15 @@ const QuizInterface = () => {
     return { totalQuizzes, averageScore, bestScore };
   };
 
+  const getFilteredQuizzes = () => {
+    if (filterSubject === 'all') return quizzes;
+    return quizzes.filter(quiz => quiz.subject === filterSubject);
+  };
+
   const stats = getStats();
   const currentQuestion = activeQuiz?.questions[currentQuestionIndex];
   const progress = activeQuiz ? ((currentQuestionIndex + 1) / activeQuiz.questions.length) * 100 : 0;
+  const filteredQuizzes = getFilteredQuizzes();
 
   // Quiz Results View
   if (showResults && activeQuiz) {
@@ -374,7 +451,7 @@ const QuizInterface = () => {
             <div className="flex justify-center space-x-4">
               <Button onClick={retakeQuiz} variant="outline">
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Retake Quiz
+                New Quiz
               </Button>
               <Button onClick={exitQuiz}>
                 Back to Quizzes
@@ -461,29 +538,55 @@ const QuizInterface = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI Quizzes</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Programming Quizzes</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Test your knowledge with AI-generated quizzes
+            Test your programming knowledge with subject-specific quizzes
           </p>
         </div>
-        <Button 
-          onClick={generateQuizzes}
-          disabled={isGenerating}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-        >
-          {isGenerating ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Zap className="h-4 w-4 mr-2" />
-              Generate Quizzes
-            </>
-          )}
-        </Button>
       </div>
+
+      {/* Subject Selection */}
+      <Card className="p-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Start a New Quiz</h3>
+          <div className="flex space-x-4">
+            <div className="flex-1">
+              <Label htmlFor="subject-select">Choose Subject</Label>
+              <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a programming language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROGRAMMING_SUBJECTS.map((subject) => (
+                    <SelectItem key={subject} value={subject}>
+                      {subject}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button 
+                onClick={() => selectedSubject && generateQuizForSubject(selectedSubject)}
+                disabled={!selectedSubject || isGenerating}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Start Quiz
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -507,9 +610,30 @@ const QuizInterface = () => {
         </Card>
       </div>
 
-      {/* Available Quizzes */}
+      {/* Filter */}
+      {quizzes.length > 0 && (
+        <div className="flex items-center space-x-4">
+          <Filter className="h-4 w-4" />
+          <Label htmlFor="filter-select">Filter by Subject:</Label>
+          <Select value={filterSubject} onValueChange={setFilterSubject}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Subjects</SelectItem>
+              {PROGRAMMING_SUBJECTS.map((subject) => (
+                <SelectItem key={subject} value={subject}>
+                  {subject}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Previous Quizzes */}
       <div className="grid gap-6">
-        {quizzes.length === 0 ? (
+        {filteredQuizzes.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -517,16 +641,12 @@ const QuizInterface = () => {
                 No Quizzes Yet
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Generate AI quizzes from your syllabus topics to start testing your knowledge
+                Select a programming language above to start your first quiz
               </p>
-              <Button onClick={generateQuizzes} disabled={isGenerating}>
-                <Zap className="h-4 w-4 mr-2" />
-                Generate Your First Quiz
-              </Button>
             </CardContent>
           </Card>
         ) : (
-          quizzes.map((quiz) => {
+          filteredQuizzes.map((quiz) => {
             const relatedQuizResults = quizResults.filter(result => result.quizId === quiz.id);
             const bestScore = relatedQuizResults.length > 0 
               ? Math.max(...relatedQuizResults.map(result => result.score))
@@ -565,8 +685,8 @@ const QuizInterface = () => {
                         </div>
                       )}
                     </div>
-                    <Button onClick={() => startQuiz(quiz)}>
-                      {relatedQuizResults.length > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                    <Button onClick={() => generateQuizForSubject(quiz.subject)}>
+                      New Quiz
                     </Button>
                   </div>
                 </CardContent>
