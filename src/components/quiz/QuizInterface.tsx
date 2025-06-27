@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -528,9 +527,9 @@ const QuizInterface = () => {
           </Card>
         ) : (
           quizzes.map((quiz) => {
-            const quizResults = quizResults.filter(result => result.quizId === quiz.id);
-            const bestScore = quizResults.length > 0 
-              ? Math.max(...quizResults.map(result => result.score))
+            const relatedQuizResults = quizResults.filter(result => result.quizId === quiz.id);
+            const bestScore = relatedQuizResults.length > 0 
+              ? Math.max(...relatedQuizResults.map(result => result.score))
               : null;
             
             return (
@@ -559,15 +558,15 @@ const QuizInterface = () => {
                         <Clock className="h-4 w-4" />
                         <span>~{Math.ceil(quiz.questions.length * 1.5)} min</span>
                       </div>
-                      {quizResults.length > 0 && (
+                      {relatedQuizResults.length > 0 && (
                         <div className="flex items-center space-x-1">
                           <Award className="h-4 w-4" />
-                          <span>{quizResults.length} attempts</span>
+                          <span>{relatedQuizResults.length} attempts</span>
                         </div>
                       )}
                     </div>
                     <Button onClick={() => startQuiz(quiz)}>
-                      {quizResults.length > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                      {relatedQuizResults.length > 0 ? 'Retake Quiz' : 'Start Quiz'}
                     </Button>
                   </div>
                 </CardContent>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,16 +30,25 @@ interface Topic {
   estimatedHours: number;
 }
 
+interface NewTopicForm {
+  title: string;
+  description: string;
+  subject: string;
+  deadline: string;
+  priority: 'high' | 'medium' | 'low';
+  estimatedHours: number;
+}
+
 const SyllabusManager = () => {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isAddingTopic, setIsAddingTopic] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
-  const [newTopic, setNewTopic] = useState({
+  const [newTopic, setNewTopic] = useState<NewTopicForm>({
     title: '',
     description: '',
     subject: '',
     deadline: '',
-    priority: 'medium' as const,
+    priority: 'medium',
     estimatedHours: 2
   });
   const { toast } = useToast();
