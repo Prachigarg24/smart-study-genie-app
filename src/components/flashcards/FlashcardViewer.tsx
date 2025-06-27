@@ -89,12 +89,7 @@ const FlashcardViewer = () => {
   const [showLearnedOnly, setShowLearnedOnly] = useState(false);
 
   useEffect(() => {
-    // Generate initial flashcards for all subjects
-    const allFlashcards: Flashcard[] = [];
-    programmingSubjects.slice(0, 6).forEach(subject => {
-      allFlashcards.push(...generateProgrammingFlashcards(subject));
-    });
-    setFlashcards(allFlashcards);
+    generateNewFlashcards();
   }, []);
 
   useEffect(() => {
@@ -114,28 +109,21 @@ const FlashcardViewer = () => {
   }, [flashcards, selectedSubject, showLearnedOnly]);
 
   const generateNewFlashcards = () => {
-    const subject = selectedSubject === 'all' ? 
-      programmingSubjects[Math.floor(Math.random() * programmingSubjects.length)] : 
-      selectedSubject;
+    const allNewCards: Flashcard[] = [];
+    const subjects = selectedSubject === 'all' ? 
+      programmingSubjects.slice(0, 6) : 
+      [selectedSubject];
     
-    const newCards = generateProgrammingFlashcards(subject);
+    subjects.forEach(subject => {
+      allNewCards.push(...generateProgrammingFlashcards(subject));
+    });
     
-    if (selectedSubject === 'all') {
-      // Add cards for multiple subjects
-      const subjects = programmingSubjects.slice(0, 4);
-      const allNewCards: Flashcard[] = [];
-      subjects.forEach(subj => {
-        allNewCards.push(...generateProgrammingFlashcards(subj));
-      });
-      setFlashcards(allNewCards);
-    } else {
-      setFlashcards(newCards);
-    }
+    setFlashcards(allNewCards);
     setCurrentIndex(0);
     setIsFlipped(false);
   };
 
-  const handleFlip = () => {
+  const handleCardClick = () => {
     setIsFlipped(!isFlipped);
   };
 
@@ -175,8 +163,8 @@ const FlashcardViewer = () => {
 
   if (!currentCard) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Programming Flashcards</h2>
             <p className="text-gray-600 dark:text-gray-400">Master programming concepts with interactive flashcards</p>
@@ -200,7 +188,7 @@ const FlashcardViewer = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -294,10 +282,10 @@ const FlashcardViewer = () => {
       <div className="flex justify-center">
         <div className="relative w-full max-w-2xl">
           <Card 
-            className={`h-80 cursor-pointer transition-all duration-300 transform hover:scale-105 ${
+            className={`h-80 cursor-pointer transition-all duration-500 transform hover:scale-105 ${
               isFlipped ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800'
             }`}
-            onClick={handleFlip}
+            onClick={handleCardClick}
           >
             <CardHeader className="text-center">
               <div className="flex items-center justify-between">
@@ -346,7 +334,7 @@ const FlashcardViewer = () => {
           Previous
         </Button>
         
-        <Button onClick={handleFlip} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleCardClick} className="bg-blue-600 hover:bg-blue-700">
           <RotateCcw className="h-4 w-4 mr-2" />
           {isFlipped ? 'Show Question' : 'Show Answer'}
         </Button>
